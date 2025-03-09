@@ -22,6 +22,7 @@
 
 import random
 
+
 import contest.util as util
 
 from contest.capture_agents import CaptureAgent
@@ -77,7 +78,6 @@ class AlphaBetaAgent(CaptureAgent):
         """
         inf = float('inf')
         def value(state, depth, agent_idx, alpha, beta):
-            #print(agent_idx)
             curr_agent_idx = agent_idx % state.get_num_agents()
             if depth == self.depth or state.is_over():
                 return self.evaluate(state), None
@@ -131,10 +131,15 @@ class AlphaBetaAgent(CaptureAgent):
                 next_depth = depth + 1 if (agent_idx % state.get_num_agents()) == self.index else depth
                 newVal,_ = value(successor, next_depth, agent_idx + 1, alpha, beta)
 
+                # prevents reversing
+                rev = Directions.REVERSE[state.get_agent_state(idx).configuration.direction]
+                if action == rev:
+                    newVal = newVal -50
                 # takes lowest value and its action between current value and the new value
                 if newVal > v:
                     v = newVal
                     best_action = action
+
 
                 # change alpha to largest value
                 alpha = max(alpha, newVal)
@@ -264,6 +269,7 @@ class BountyHunter(AlphaBetaAgent):
         my_state = game_state.get_agent_state(self.index)
         my_pos = game_state.get_agent_position(self.index)
         features['successor_score'] = -len(food_list)  # self.get_score(successor)
+        opp = self.get_opponents(game_state)
 
         # Compute distance to the nearest food
 
@@ -288,10 +294,6 @@ class BountyHunter(AlphaBetaAgent):
 
         if len(defenders) > 0:
             dists = game_state.agent_distances
-            print(self.index)
-            print(dists)
-            print( min([dists[i] for i in opp]))
-
             features['invader_distance'] = min([dists[i] for i in opp])
 
 
@@ -327,7 +329,7 @@ class BountyHunter(AlphaBetaAgent):
             return {'successor_score': pow(0.65, 0.5) * 5,
                     'distance_to_food': -pow(0.65, 2),
                     'eaten_food': 10,
-                    'invader_distance': -50,
+                    'invader_distance': 50,
                     'num_defenders': -10,
                     'num_attackers': 10,
                     'powerPellet': -2,
@@ -337,7 +339,7 @@ class BountyHunter(AlphaBetaAgent):
             return {'successor_score': pow(0.65, 0.5) * 5,
                     'distance_to_food': -0.002,
                     'eaten_food': 2,
-                    'invader_distance': -100,
+                    'invader_distance': 100,
                     'num_defenders': -40,
                     'num_attackers': 10,
                     'powerPellet': 0,
@@ -347,11 +349,11 @@ class BountyHunter(AlphaBetaAgent):
             return {'successor_score': pow(0.65, 0.5) * 5,
                     'distance_to_food': -pow(0.65, 2),
                     'eaten_food': 2,
-                    'invader_distance': -80,
+                    'invader_distance': 80,
                     'num_defenders': -30,
                     'num_attackers': 10,
                     'powerPellet': -4,
-                    'return_distance': -1,
+                    'return_distance': -10,
                     'on_defense': 10}
 
 
