@@ -22,8 +22,6 @@
 
 import random
 
-from sympy.codegen.ast import continue_
-
 import contest.util as util
 
 from contest.capture_agents import CaptureAgent
@@ -234,7 +232,6 @@ class ReflexCaptureAgent(CaptureAgent):
         """
         features = self.get_features(game_state, action)
         weights = self.get_weights(game_state, action)
-        print(features*weights)
         return features * weights
 
     def get_features(self, game_state, action):
@@ -283,14 +280,25 @@ class BountyHunter(AlphaBetaAgent):
         features['num_defenders'] = len(defenders)
         features['num_attackers'] = 2 - len(defenders)
 
+        trigger = False
+        for a in enemies:
+            if a.scared_timer > 0 :
+                trigger = True
+
+
         if len(defenders) > 0:
             dists = game_state.agent_distances
-            features['invader_distance'] = min(dists)
-        for a in defenders:
-            if a.scared_timer > 0:
-                features['invader_distance'] = -features['invader_distance']
-            else:
-                features['invader_distance'] = 5 * features['invader_distance']
+            print(self.index)
+            print(dists)
+            print( min([dists[i] for i in opp]))
+
+            features['invader_distance'] = min([dists[i] for i in opp])
+
+
+        if trigger:
+            features['invader_distance'] = -features['invader_distance']
+        else:
+            features['invader_distance'] = features['invader_distance']
         if self.red:
             my_capsules = game_state.get_blue_capsules()
         else:
@@ -325,7 +333,7 @@ class BountyHunter(AlphaBetaAgent):
                     'powerPellet': -2,
                     'return_distance': -0.01,
                     'on_defense': 0}
-        elif features['eaten_food'] > 15:
+        elif features['eaten_food'] > 10:
             return {'successor_score': pow(0.65, 0.5) * 5,
                     'distance_to_food': -0.002,
                     'eaten_food': 2,
@@ -379,14 +387,15 @@ class BorderPatrol(ReflexCaptureAgent):
         if action == rev: features['reverse'] = 1
 
 
-        # food needs defending (self added)
-        defending_food = self.get_food_you_are_defending(successor).as_list()
-        closest_food =  min([self.get_maze_distance(my_pos, food) for food in defending_food])
-
         # hold the line
         border_line = game_state.data.layout.width // 2
         boundary_x = border_line - 1 if self.red else border_line
         border_distance = abs(my_pos[0] - boundary_x)
+
+        # food needs defending (self added)
+        defending_food = self.get_food_you_are_defending(successor).as_list()
+        closest_food = min([self.get_maze_distance(my_pos, food) for food in defending_food])
+
 
         # camp own capsules
         capsules = self.get_capsules_you_are_defending(successor)
@@ -397,19 +406,20 @@ class BorderPatrol(ReflexCaptureAgent):
         # go hunt if scared
         scary = my_state.scared_timer
         if scary > 0:
-            return BountyHunter.get_features(successor)
+            return BountyHunter.get_features(self, successor)
 
         # set features depended on if enemy attacking
         if len(invaders) > 0:
-            features['food_defense'] = 0
+            features['near_border'] = 0
             if not capsules:
-                features['near_border'] = closest_food
+                features['food_defense'] = closest_food
+                features['capsule_defense'] = 0
             else:
-                features['near_border'] = 0
-            features['capsule_defense'] = closest_capsule
+                features['food_defense'] = 0
+                features['capsule_defense'] = 100 - closest_capsule
         else:
-            features['food_defense'] = 0
-            features['near_border'] = border_distance
+            features['food_defense'] = 100 - closest_food
+            features['near_border'] = 100 - border_distance
             features['capsule_defense'] = 0
 
         return features
@@ -423,16 +433,39 @@ class BorderPatrol(ReflexCaptureAgent):
                 'on_defense': 1000,
                 'invader_distance': -100,
                 'stop': -100, 'reverse': -2,
-                'food_defense': -100,
-                'near_border' : -100,
-                'capsule_defense': -100}
+                'food_defense': 1,
+                'near_border' : 2,
+                'capsule_defense': 1
+                }
         else:
-            return BountyHunter.get_weights(successor)
-
-                # {'num_invaders': 0,
-                # 'on_defense': 1,
-                # 'invader_distance': 100,
-                # 'stop': -100, 'reverse': -2,
-                # 'food_defense': 0,
-                # 'near_border' : 0,
-                # 'capsule_defense': 0}
+            features = BountyHunter.get_features(self, successor)
+            if features['eaten_food'] < 5:
+                return {'successor_score': pow(0.65, 0.5) * 5,
+                        'distance_to_food': -pow(0.65, 2),
+                        'eaten_food': 10,
+                        'invader_distance': -50,
+                        'num_defenders': -10,
+                        'num_attackers': 10,
+                        'powerPellet': -2,
+                        'return_distance': -0.01,
+                        'on_defense': 0}
+            elif features['eaten_food'] > 15:
+                return {'successor_score': pow(0.65, 0.5) * 5,
+                        'distance_to_food': -0.002,
+                        'eaten_food': 2,
+                        'invader_distance': -100,
+                        'num_defenders': -40,
+                        'num_attackers': 10,
+                        'powerPellet': 0,
+                        'return_distance': -50,
+                        'on_defense': 1000}
+            else:
+                return {'successor_score': pow(0.65, 0.5) * 5,
+                        'distance_to_food': -pow(0.65, 2),
+                        'eaten_food': 2,
+                        'invader_distance': -80,
+                        'num_defenders': -30,
+                        'num_attackers': 10,
+                        'powerPellet': -4,
+                        'return_distance': -1,
+                        'on_defense': 10}
